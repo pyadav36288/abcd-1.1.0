@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { UserLogin } from "../models/userLogin.model.js";
 import { User } from "../models/user.model.js";
+import { apiError } from "../utils/apiError.js";
 
 /**
  * Auth Service - Handles all authentication business logic
@@ -39,12 +40,12 @@ export const authService = {
       }
 
       if (!userLogin) {
-        throw new Error("Invalid login credentials");
+        throw new apiError(401, "Invalid login credentials");
       }
 
       // Check if account is permanently locked
       if (userLogin.isPermanentlyLocked) {
-        throw new Error("Account is permanently locked. Contact administrator.");
+        throw new apiError(403, "Account is permanently locked. Contact administrator.");
       }
 
       // Check if account is temporarily locked
@@ -52,7 +53,8 @@ export const authService = {
         const remainingTime = Math.ceil(
           (userLogin.lockUntil - new Date()) / (1000 * 60)
         );
-        throw new Error(
+        throw new apiError(
+          429,
           `Account is locked. Try again in ${remainingTime} minutes.`
         );
       }
@@ -70,18 +72,18 @@ export const authService = {
         }
 
         await userLogin.save();
-        throw new Error("Invalid login credentials");
+        throw new apiError(401, "Invalid login credentials");
       }
 
       // Fetch user details and enforce login flags
       const user = await User.findById(userLogin.user);
       if (!user) {
-        throw new Error("Associated user not found");
+        throw new apiError(500, "Associated user not found");
       }
 
       // Only allow login when canLogin and isActive are true
       if (!user.canLogin || !user.isActive) {
-        throw new Error("User is not allowed to login");
+        throw new apiError(403, "User is not allowed to login");
       }
 
       // Reset failed attempts on successful login
@@ -112,7 +114,8 @@ export const authService = {
         message: "Login successful",
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -126,14 +129,14 @@ export const authService = {
     try {
       const userLogin = await UserLogin.findOne({ user: userId });
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       // Logout from specific device
       const logoutSuccess = await userLogin.logoutDevice(deviceId);
 
       if (!logoutSuccess) {
-        throw new Error("Device not found");
+        throw new apiError(404, "Device not found");
       }
 
       // Check if any devices are still active
@@ -151,7 +154,8 @@ export const authService = {
         message: "Logout successful",
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -164,7 +168,7 @@ export const authService = {
     try {
       const userLogin = await UserLogin.findOne({ user: userId });
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       await userLogin.logoutAllDevices();
@@ -176,7 +180,8 @@ export const authService = {
         message: "Logged out from all devices",
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -197,7 +202,7 @@ export const authService = {
       // Find user
       const userLogin = await UserLogin.findById(decoded.id);
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       // Verify token belongs to the device
@@ -206,7 +211,7 @@ export const authService = {
         deviceId
       );
       if (!isValidToken) {
-        throw new Error("Invalid refresh token for this device");
+        throw new apiError(401, "Invalid refresh token for this device");
       }
 
       // Generate new tokens
@@ -221,9 +226,10 @@ export const authService = {
       };
     } catch (error) {
       if (error.name === "TokenExpiredError") {
-        throw new Error("Refresh token has expired. Please login again.");
+        throw new apiError(401, "Refresh token has expired. Please login again.");
       }
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -236,7 +242,7 @@ export const authService = {
     try {
       const userLogin = await UserLogin.findOne({ user: userId });
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       return {
@@ -244,7 +250,8 @@ export const authService = {
         devices: userLogin.getActiveDevices(),
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -258,12 +265,12 @@ export const authService = {
     try {
       const userLogin = await UserLogin.findOne({ user: userId });
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       const revoked = await userLogin.revokeRefreshToken(token);
       if (!revoked) {
-        throw new Error("Token not found");
+        throw new apiError(404, "Token not found");
       }
 
       return {
@@ -271,7 +278,8 @@ export const authService = {
         message: "Token revoked successfully",
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -285,7 +293,7 @@ export const authService = {
     try {
       const userLogin = await UserLogin.findOne({ user: userId });
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       userLogin.isPermanentlyLocked = true;
@@ -298,7 +306,8 @@ export const authService = {
         message: `Account locked. Reason: ${reason}`,
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -311,7 +320,7 @@ export const authService = {
     try {
       const userLogin = await UserLogin.findOne({ user: userId });
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       userLogin.isPermanentlyLocked = false;
@@ -325,7 +334,8 @@ export const authService = {
         message: "Account unlocked successfully",
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -342,13 +352,13 @@ export const authService = {
         "+password"
       );
       if (!userLogin) {
-        throw new Error("User not found");
+        throw new apiError(404, "User not found");
       }
 
       // Verify old password
       const isPasswordValid = await userLogin.comparePassword(oldPassword);
       if (!isPasswordValid) {
-        throw new Error("Current password is incorrect");
+        throw new apiError(401, "Current password is incorrect");
       }
 
       // Update password
@@ -366,7 +376,8 @@ export const authService = {
           "Password changed successfully. Please login again with new password.",
       };
     } catch (error) {
-      throw new Error(error.message);
+      if (error instanceof apiError) throw error;
+      throw new apiError(500, error.message);
     }
   },
 
@@ -387,9 +398,9 @@ export const authService = {
       };
     } catch (error) {
       if (error.name === "TokenExpiredError") {
-        throw new Error("Access token has expired");
+        throw new apiError(401, "Access token has expired");
       }
-      throw new Error("Invalid access token");
+      throw new apiError(401, "Invalid access token");
     }
   },
 };
