@@ -24,6 +24,11 @@ const userLoginSchema = new Schema(
       required: true,
       select: false,
     },
+    // Force user to change password on next login
+    forcePasswordChange: {
+      type: Boolean,
+      default: false,
+    },
     refreshTokens: [
       {
         token: { type: String },

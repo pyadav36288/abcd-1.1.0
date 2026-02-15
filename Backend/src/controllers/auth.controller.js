@@ -7,6 +7,41 @@ import {
 
 /**
  * Auth Controller - Handles HTTP requests for authentication
+ * 
+ * =====================================================
+ * TOKEN FLOW & SECURITY:
+ * =====================================================
+ * 
+ * 1. LOGIN FLOW:
+ *    - Client sends: loginId (username/userId/email) + password + deviceId
+ *    - Server validates, generates accessToken + refreshToken
+ *    - refreshToken stored in httpOnly cookie (secure, not accessible by JS)
+ *    - accessToken returned in response body (kept in memory/state)
+ *    - Client stores: accessToken in memory/context, refreshToken in cookie (automatic)
+ * 
+ * 2. REQUEST FLOW (Authenticated):
+ *    - Client sends accessToken in Authorization header (Bearer token)
+ *    - Middleware verifies token - if invalid/expired, return 401
+ *    - If token valid, proceed to route
+ * 
+ * 3. TOKEN REFRESH FLOW (when accessToken expires):
+ *    - Client sends POST /refresh with deviceId
+ *    - refreshToken auto-sent in cookie
+ *    - Server validates refreshToken for device
+ *    - Generates new accessToken + new refreshToken
+ *    - Returns new accessToken in response + sets new refreshToken cookie
+ *    - Client updates accessToken in memory
+ * 
+ * 4. LOGOUT FLOW:
+ *    - Client sends POST /logout with deviceId
+ *    - Server logs out device and clears refreshToken cookie
+ *    - Client clears accessToken from memory
+ * 
+ * SECURITY NOTES:
+ * - Refresh token: httpOnly cookie (XSRF protected, secure)
+ * - Access token: Response body (client stores in memory, included in Authorization header)
+ * - Credentials: Never require both tokens in one place
+ * - Device tracking: Each device has unique deviceId and separate refresh token
  */
 
 // =====================================================
@@ -14,14 +49,14 @@ import {
 // =====================================================
 export const loginController = async (req, res) => {
   try {
-    const { username, password, deviceId } = req.body;
+    const { loginId, password, deviceId } = req.body;
 
     // Validation
-    if (!username || !password) {
+    if (!loginId || !password) {
       return res.status(400).json({
         success: false,
         statusCode: 400,
-        message: "Username and password are required",
+        message: "Login ID (username/userId/email) and password are required",
       });
     }
 
@@ -38,9 +73,9 @@ export const loginController = async (req, res) => {
       req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
     const userAgent = req.get("user-agent");
 
-    // Call service
+    // Call service (loginId can be username, userId, or email)
     const result = await authService.login(
-      username,
+      loginId,
       password,
       deviceId,
       ipAddress,
@@ -59,6 +94,7 @@ export const loginController = async (req, res) => {
         user: result.user,
         accessToken: result.accessToken,
         deviceId: result.deviceId,
+        forcePasswordChange: result.forcePasswordChange || false,
       },
     });
   } catch (error) {

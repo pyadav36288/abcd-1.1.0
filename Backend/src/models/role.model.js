@@ -158,7 +158,6 @@ const roleSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
     },
 
     isDefault: {
@@ -190,7 +189,6 @@ const roleSchema = new mongoose.Schema(
     isDeleted: {
       type: Boolean,
       default: false,
-      index: true,
     },
 
     deletedAt: {

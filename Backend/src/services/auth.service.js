@@ -11,20 +11,35 @@ import { User } from "../models/user.model.js";
 // =====================================================
 export const authService = {
   /**
-   * Login user with username and password
-   * @param {string} username - Username
+   * Login user with loginId (username/userId/email) and password
+   * @param {string} loginId - Username, userId, or email
    * @param {string} password - Plain password
    * @param {string} deviceId - Device identifier
    * @param {string} ipAddress - Client IP address
    * @param {string} userAgent - Client user agent
-   * @returns {Promise<Object>} - User data, access token, refresh token
+   * @returns {Promise<Object>} - User data, access token, refresh token, forcePasswordChange flag
    */
-  async login(username, password, deviceId, ipAddress = null, userAgent = null) {
+  async login(loginId, password, deviceId, ipAddress = null, userAgent = null) {
     try {
-      // Find user login record
-      const userLogin = await UserLogin.findOne({ username }).select("+password");
+      // Find UserLogin by username first (case-insensitive)
+      let userLogin = await UserLogin.findOne({ username: loginId.toLowerCase() }).select("+password");
+      
+      // If not found by username, try to find User by userId or email, then get their UserLogin
       if (!userLogin) {
-        throw new Error("Invalid username or password");
+        const user = await User.findOne({
+          $or: [
+            { userId: loginId },
+            { email: loginId }
+          ]
+        });
+        
+        if (user) {
+          userLogin = await UserLogin.findOne({ user: user._id }).select("+password");
+        }
+      }
+
+      if (!userLogin) {
+        throw new Error("Invalid login credentials");
       }
 
       // Check if account is permanently locked
@@ -55,7 +70,18 @@ export const authService = {
         }
 
         await userLogin.save();
-        throw new Error("Invalid username or password");
+        throw new Error("Invalid login credentials");
+      }
+
+      // Fetch user details and enforce login flags
+      const user = await User.findById(userLogin.user);
+      if (!user) {
+        throw new Error("Associated user not found");
+      }
+
+      // Only allow login when canLogin and isActive are true
+      if (!user.canLogin || !user.isActive) {
+        throw new Error("User is not allowed to login");
       }
 
       // Reset failed attempts on successful login
@@ -73,14 +99,15 @@ export const authService = {
         userAgent
       );
 
-      // Fetch user details
-      const user = await User.findById(userLogin.user).select("-password");
+      // Fetch user details for response (exclude sensitive fields)
+      const userResponse = await User.findById(userLogin.user).select("-password");
 
       return {
         success: true,
-        user,
+        user: userResponse,
         accessToken,
         refreshToken,
+        forcePasswordChange: !!userLogin.forcePasswordChange,
         deviceId,
         message: "Login successful",
       };
