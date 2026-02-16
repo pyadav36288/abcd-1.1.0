@@ -122,7 +122,7 @@ export const authService = {
   /**
    * Logout user from specific device
    * @param {string} userId - User ID from token
-   * @param {string} deviceId - Device to logout from
+   * @param {string} deviceId - Device to logout from (optional)
    * @returns {Promise<Boolean>} - Success status
    */
   async logout(userId, deviceId) {
@@ -132,11 +132,17 @@ export const authService = {
         throw new apiError(404, "User not found");
       }
 
-      // Logout from specific device
-      const logoutSuccess = await userLogin.logoutDevice(deviceId);
+      let logoutSuccess = false;
 
+      // If deviceId is provided, try to logout from specific device
+      if (deviceId) {
+        logoutSuccess = await userLogin.logoutDevice(deviceId);
+      }
+
+      // If deviceId not provided or not found, logout from all devices
       if (!logoutSuccess) {
-        throw new apiError(404, "Device not found");
+        await userLogin.logoutAllDevices();
+        logoutSuccess = true;
       }
 
       // Check if any devices are still active

@@ -90,7 +90,7 @@ export const loginController = asyncHandler(async (req, res) => {
 // LOGOUT CONTROLLER
 // =====================================================
 export const logoutController = asyncHandler(async (req, res) => {
-  const { deviceId = uuidv4() } = req.body;
+  const { deviceId = uuidv4() } = req.body || {};
   
   // Try to get userId from verified JWT (normal flow)
   let userId = req.user?.id;
@@ -125,10 +125,24 @@ export const logoutController = asyncHandler(async (req, res) => {
 // LOGOUT ALL DEVICES CONTROLLER
 // =====================================================
 export const logoutAllDevicesController = asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
+  // Try to get userId from verified JWT (normal flow)
+  let userId = req.user?.id;
+
+  // If not available, try to get from refreshToken in cookie
+  if (!userId && req.cookies?.refreshToken) {
+    try {
+      const decoded = jwt.verify(
+        req.cookies.refreshToken,
+        process.env.REFRESH_TOKEN_SECRET || "REFRESH_TOKEN_DEFAULT"
+      );
+      userId = decoded.id;
+    } catch (error) {
+      // Continue without userId, will fail below
+    }
+  }
 
   if (!userId) {
-    throw new apiError(401, "Unauthorized");
+    throw new apiError(401, "Unauthorized - Please provide valid access token or refresh token");
   }
 
   // Call service
