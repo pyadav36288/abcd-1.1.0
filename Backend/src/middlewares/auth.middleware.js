@@ -7,17 +7,26 @@ import { User } from "../models/user.model.js";
 
 export const verifyJWT = async (req, res, next) => {
   try {
-    // Get token from Authorization header or cookies
-    const token =
-      req.headers.authorization?.split(" ")[1] ||
-      req.cookies?.accessToken ||
-      req.body?.accessToken;
+    // Get token from Authorization header (with or without "Bearer" prefix)
+    let token = null;
+    
+    if (req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      token = authHeader.startsWith("Bearer ") 
+        ? authHeader.slice(7) 
+        : authHeader;
+    }
+    
+    // Fallback: check cookies and body
+    if (!token) {
+      token = req.cookies?.accessToken || req.body?.accessToken;
+    }
 
     if (!token) {
       return res.status(401).json({
         success: false,
         statusCode: 401,
-        message: "Access token is missing",
+        message: "Access token is missing. Send as 'Authorization: Bearer {token}' header",
       });
     }
 

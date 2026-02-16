@@ -5,6 +5,8 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { apiError } from "../utils/apiError.js";
+import { v4 as uuidv4 } from "uuid";
+import jwt from "jsonwebtoken";
 
 /**
  * Auth Controller - Handles HTTP requests for authentication
@@ -49,15 +51,11 @@ import { apiError } from "../utils/apiError.js";
 // LOGIN CONTROLLER
 // =====================================================
 export const loginController = asyncHandler(async (req, res) => {
-  const { loginId, password, deviceId } = req.body;
+  const { loginId, password, deviceId = uuidv4() } = req.body;
 
   // Validation
   if (!loginId || !password) {
     throw new apiError(400, "Login ID (username/userId/email) and password are required");
-  }
-
-  if (!deviceId) {
-    throw new apiError(400, "Device ID is required");
   }
 
   // Get client IP and user agent
@@ -65,10 +63,10 @@ export const loginController = asyncHandler(async (req, res) => {
     req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
   const userAgent = req.get("user-agent");
 
-  // Call service (loginId can be username, userId, or email)
+  // Call service (convert password to string if it's a number)
   const result = await authService.login(
     loginId,
-    password,
+    String(password),
     deviceId,
     ipAddress,
     userAgent
@@ -92,15 +90,26 @@ export const loginController = asyncHandler(async (req, res) => {
 // LOGOUT CONTROLLER
 // =====================================================
 export const logoutController = asyncHandler(async (req, res) => {
-  const { deviceId } = req.body;
-  const userId = req.user?.id;
-
-  if (!userId) {
-    throw new apiError(401, "Unauthorized");
+  const { deviceId = uuidv4() } = req.body;
+  
+  // Try to get userId from verified JWT (normal flow)
+  let userId = req.user?.id;
+  
+  // If not available, try to get from refreshToken in cookie
+  if (!userId && req.cookies?.refreshToken) {
+    try {
+      const decoded = jwt.verify(
+        req.cookies.refreshToken,
+        process.env.REFRESH_TOKEN_SECRET || "REFRESH_TOKEN_DEFAULT"
+      );
+      userId = decoded.id;
+    } catch (error) {
+      // Continue without userId, will fail below
+    }
   }
 
-  if (!deviceId) {
-    throw new apiError(400, "Device ID is required");
+  if (!userId) {
+    throw new apiError(401, "Unauthorized - Please provide valid access token or refresh token");
   }
 
   // Call service
@@ -136,17 +145,13 @@ export const logoutAllDevicesController = asyncHandler(async (req, res) => {
 // =====================================================
 export const refreshTokenController = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-  const { deviceId } = req.body;
+  const { deviceId = uuidv4() } = req.body;
 
   if (!refreshToken) {
     throw new apiError(401, "Refresh token is required");
   }
 
-  if (!deviceId) {
-    throw new apiError(400, "Device ID is required");
-  }
-
-  // Call service
+  // Call service (deviceId is optional, will auto-generate if not provided)
   const result = await authService.refreshTokens(refreshToken, deviceId);
 
   // Set new refresh token in cookie

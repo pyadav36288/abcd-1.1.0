@@ -59,8 +59,8 @@ export const authService = {
         );
       }
 
-      // Verify password
-      const isPasswordValid = await userLogin.comparePassword(password);
+      // Verify password (convert to string in case it's sent as number)
+      const isPasswordValid = await userLogin.comparePassword(String(password));
       if (!isPasswordValid) {
         // Increment failed attempts
         userLogin.failedLoginAttempts = (userLogin.failedLoginAttempts || 0) + 1;
