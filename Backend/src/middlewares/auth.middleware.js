@@ -22,9 +22,12 @@ export const verifyJWT = async (req, res, next) => {
     }
 
     // Verify token
+    if (!process.env.ACCESS_TOKEN_SECRET) {
+      throw new Error("ACCESS_TOKEN_SECRET is not configured");
+    }
     const decoded = jwt.verify(
       token,
-      process.env.ACCESS_TOKEN_SECRET || "ACCESS_TOKEN_DEFAULT"
+      process.env.ACCESS_TOKEN_SECRET
     );
 
     // Fetch user details

@@ -2,6 +2,9 @@ import dotenv from "dotenv";
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import { getEnvConfig, validateEnv } from "./config/env.js";
+import dns from "dns";
+
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 // Load environment variables
 dotenv.config();
@@ -27,8 +30,8 @@ connectDB()
         ║     ABCD2 Backend Server Running       ║
         ╠════════════════════════════════════════╣
         ║ Environment: ${envConfig.nodeEnv.padEnd(25)} ║
-        ║ Port: ${PORT.toString().padEnd(31)} ║
-        ║ API: http://localhost:${PORT}/api       ║
+        ║ Port: ${PORT.toString().padEnd(31)}  ║
+        ║ API: http://localhost:${PORT}/api         ║
         ╚════════════════════════════════════════╝
       `);
     });
